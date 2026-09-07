@@ -1,0 +1,405 @@
+Current tasks:
+
+Update/Correct/Modify/Bug-Fixing/Optional tasks:
+    - improve visual for border
+        when side by side with other blocks, border becomes thicker
+        there is also could be the issue of border alignment, the border in between tiles of same block are offset
+        actual tetris uses a buffer border (drawn permanently on grid to cover these areas)?
+    - sound effects, music
+        touchdown sound (minecraft place block sound)
+        rotate sound (wind gust sound)
+        block holding/swapping sound
+        line clear sound
+            same sound, different excitement level for 1-4 lines cleared
+        - background music that speeds up tempo with increasing levels
+    - scoring, difficulty scaling
+            show score and level (needs a separate window outside play area)
+                score auto-scales font size?
+            - show score earned for each clear, e.g. "+100, Single", show based on final score (includes level multiplier, etc.)
+                this pop-up score should appear near cleared line, then fade-out
+            - Scoring:
+                Base score (Level 1):
+                    Single (1 line) 100 
+                    Double (2 lines) 300
+                    Triple (3 lines) 500
+                    Tetris (4 lines) 800 (also known as Quads/Tetrises)
+                Level 2: base score x2, Level 3: base score x3
+                Bonuses and Special Clears:
+                    Soft Drop / Hard Drop: Manually (non-gravity move) dropping pieces rewards small incremental points (typically 1 point per cell for soft drops, 2 points per cell for hard drops).
+                        make an instance attribute that tracks the cell steps when it moves due to soft/hard drop, and not fall drop
+                        the move method needs an boolean argument to differentiate the moves
+                        register a cell count each time move down manually (through soft or hard drop) is executed
+                        upon touchdown, calculate the points for the cell step count (soft and hard touchdown differs)
+                        issue: due to my rollback method for collision during movement, movement still registers upon collision, causing cell step count to increase
+                            add collision detection before incrementing cell step count 
+                        modify use drop step count as cumulative variable
+                        each time soft drop (press/hold), the cumulative value resets to 0
+                        finally, test soft drop all the way, hard drop all the way, soft drop halfway then hard drop the rest of the way, see score difference
+                    - Back-to-Back (B2B): Consecutive difficult clears (T-Spins or Tetrises) grant a 1.5× score multiplier.
+                        Breaking the Chain: Clearing single, double, or triple line clears (non-difficult moves) resets the B2B multiplier back to normal (1×)
+                    - Combo Bonus: Clearing lines on consecutive pieces adds incremental score bonuses (50 × combo count × level).
+                    - Perfect Clear (All Clear): Clearing the entire board completely rewards massive flat points (e.g., 8,000 to 20,000+ base points depending on the clear type).
+                    - Optional: T-Spin trick points, T-Spin clear points
+            difficulty scales primarily by:
+                increasing the gravity speed (how fast pieces fall) 
+                Levels advance typically after clearing every 10 lines, forcing faster reactions and tighter decision-making.
+                decreasing the lock delay (how long you can slide a piece once it touches the stack).
+    - new high score entry animation occasionally buggy, only name plays animation, then stuck 
+        happens only to actual new high scores that beat old entries?
+        test on other entries ok?
+    - random spawning's perceived randomness can be improved further, must have fewer consecutive repeats
+
+Next tasks:
+
+Tasks done:
+    - block render
+    - block movement (left, right, down, jump to bottom)
+    - user interaction with keys (regulate key-spam/speed for block left/right/down movement)
+    - change block orientation
+        make block rotate in a cyclic/symmetrical manner, and doesn't stray away gradually
+    - make collision with left, right and bottom wall
+        limit block movement
+        boundary checking when user change block coordinate (lateral movement)
+        needs to follow as block rotates
+    - convert "|" block to sprite
+    - make block falling down at fixed rate
+    - make blocks keep falling down, new ones keep coming
+    - make multiple blocks?
+        use sprites?
+    - setting the current block to stack/bottom, then create new and switch focus to next block
+        if block reached bottom (collision with bottom edge), create new block and set it as cur_block
+    - modify spacebar action to have collision with other blocks, cannot hardcode snap to bottom
+        make collision with other blocks (try with one block type only first)
+        need to disable falling instantly upon collision
+        collide rect ratio?
+            pg.sprite.collide_rect_ratio(1.01)
+            cannot inflate the sides/bottom, only top edge
+            this also inflates both sprites
+        collide mask?, pixel-perfect collision?
+            suitable for irregular shaped objects, not applicable here (maybe for other blocks)
+        it has to stop where the collision is
+            maybe make inflated hit box for bottom edge of current block only
+            add 1 pixel inflation for bottom edge of current block's rect
+            but this inflated edge must follow block movement/rotation, and remain pointing downwards
+            can also remove the offset for bottom edge of boundary, is redundant in this case
+        it needs hit boxes / inflated bubble, so it doesn't merge (kinda like clamping)
+        bottom edge for detection setting collision: use offset hitbox rect
+        inflate other edges for preventing merging, clamping
+            can use collide rect ratio as callback function for spritecollide
+            needs to handle both move and rotate
+        for rotate, must prevent rotation, if rotated position has collision, doesn't matter where it collides
+            or should I rotate the rect first, then check for collision, then revert rotation if found collision
+            perhaps store (left,top,width,height) of the 4 different states in a list or tuple, for easy resuse, also can directly rotated each states by index
+    - modularise block profiles and orientation profiles (I and O blocks only)
+    - rebuild blocks as group sprites (each sprite is a square tile)
+        rebuild and redo tasks as before (but use sprites and groupcollide)
+        this will allow for line clearing
+        each sprite is now simpler, the same square tile, but I must make a class to separately construct the blocks
+        use vectors
+    - visual update, blocks have individual square outline
+    - if player constantly rotate, he can avoid setting the block indefinitely, due to the hitbox constantly changing, the hitbox timer doesn't lapse 
+        actual tetris block slow blinks upon first contact
+        then if the cumulative time of hitbox collision during that window (move/rotate) exceeds 1s, sets upon the most recent hitbox collision
+    - replace hitbox with projection/ghost block (showing where it will snap to bottom)
+        this might be more than an aesthetic, the aesthetic part is actually just a player assist
+        but functionally, where the slow blink of the block activates when the block matches the ghost block, this is when the timer starts counting, the timer also resets when block manages to move out of its ghost before time lapsed
+        the ghost block can share the same class as the Player block, it moves & rotates together, only difference: visual (outline only) and position (move bottom)
+        issue: ghost block side to side collision must be ignore (ghost block by set blocks while player block still moves)
+            reset it everytime the player makes moves or rotates (home on player block then move to bottom)
+            it needs to match player block then move to bottom (every frame?)
+            use player blocks block_center as reference point, move ghost block to match it
+            also needs to match orientation, use idxRotation, rotate to match it
+            need to modify such that can control spawn position and orientation of block
+            alternatively, use tile-by-tile copy (like in hitbox), but move it down until collision
+                need to change each tile's appearance (can be done, just use isGhost when instantiate Tile class, but 4th tile will be a problem)
+                need to give it collision rollback like BlockGroup's move() has, use inheritance?
+        use collision with player block and ghost block to initiate timed countdown
+            collision must be full (same length collision)
+        timed countdown accounts for where player move/rotate after first coincide with ghost
+            but cumulative_collide_time should also reset after a certain time, in the case where the block coincides at a higher point in the stack, disconnects from ghost and moves down
+    - add movement accelerations if movement key held longer
+        how to detect user hold key? another timer?
+            use a threshold time (if certain time has passed, same key held, increase the speed for it by a specific amount)
+            no need for proportional increase
+        alter move_delay
+        make same for all 3 movement keys
+    - line(s) clearing
+        use a rect the size of one row as a sprite, then use spritecollide, and scan each row
+        then check length of returned list, if it matches 10
+        then clear row by removing sprites of returned list using set_Blocks_Walls.remove()
+        how about shifting down and combining remaining rows?
+            extract all sprites from set_Blocks_Walls (exclude walls and floating sprites above) that are between two fully cleared rows
+            group them, so that I can move them down
+            take note of the start and end row index of the groups, calculate the number of rows to shift down
+                cleared row on row 0, shifting doesn't executes
+                or maybe I should scan next row before entering it, and for loop stop at i=1
+                shifting happens when:
+                    going from cleared to uncleared
+                    going from cleared to boundary / last clear row is row 0
+                shift count can only increment when there is pending sprites (uncleared_spirtes)
+            or should I merge them right after each time I clear a row, so there's guarantee of two halves and one step movement of the top half
+        based on the longest block (I block), the most rows that can be cleared at once is 4
+            I can optimize by only scanning 3 more times once first cleared row is found
+            Can optimize even more by scanning based on max length of block, or even more based on block orientation (but this is insignificant)
+    - add animations (line clearing, ghost block blink/fade upon coincide)
+        framerate independent?
+        block blink/fade during coincide with ghost block: use alpha/transparency, use more frames for smoother blink
+            alternatively use continuous frame advancing float value to get ratio for alpha value
+            use set_alpha on surface
+        for line clearing, have to group lines to make them their other animation image
+        manage alternate frame/appearance of tile in Tile class
+            must do animation on those sprites before removing them, and also before merging lines
+                use triggered state machines
+                issue: cannot do merging per row, the cleared sprites will be affected (they move down by 1 each time there is mutliple cleared rows, the future cleared lines move down before they were scanned)
+                    must separate merging in another loop
+            issue: cleared rows need to be fully cleared visually before put my shrinked tile
+                instant touchdown leaves a ghost of where it completes the line, but timed touchdown doesn't, why?
+                    something skipped that is in the timed touchdown
+            do scaling (where the square shrinks)
+                pg.transform.scale()
+            do a small lag between each tile from left to right (so it looks like a sweep action)
+                Group.sprites() follows insertion order
+                for each group of 10 sprites, offset their scale factors
+                    should I pre-split into multiple lists, they are guaranteed to be multiples of 10?
+                use i value to compute different offset scale factor
+                    0 to 9, the first tile should shrink most
+    - different block types (7 types), also modularise them
+        "i", "o", "L" & its mirror("j"), "T", "Z" & its mirror("s") 
+        each block type has its own default and orientation profile
+        direct rects only work for "i", "o"
+        cannot use a single rect, but multiple rects as squares?
+        group the multiple rects as one block, use group sprites for each block
+        use polygon?
+        use sprite group class for each block with each square tile as an individual sprite class
+    - clamping algorithm for block rotation
+        rollback method is not clamping, works for movement, but not rotation
+        for rotation, need to use clamping, as rollback method prevents rotation where sometimes it's intuitively possible
+        needs to work for walls and set blocks
+        Clamping + Rollback Method:
+            save old position, vectors, images
+            do the rotation + default offsets normally
+            then compute the position(s) that does not collide with collide_group (need some math calculation)
+            how to check where the collision occurs?, this can narrow down which way to offset
+                take return values of pg.sprite.groupcollide()?
+                check difference in collide_group rects coordinates with block center
+            or don't care, just do a greedy search, move in all 4 directions, which one leads to less collisions
+                terminate when no collision
+                if all directions explored and still collision, perform ROLLBACK
+                has chance of stuck in a search loop for certain shapes (pending testing)
+        - Need to test for collisions with other blocks, and other block types
+            orange block / L-block has clamping issue on right wall, check if numbers correct
+                vector numbers are correct
+                this block is the only one with 2 blocks merging and one of them not in-line with the center
+                its detecting collision top/bottom instead of left/right
+                max_y_diff = max(y_diff, max_y_diff) if y_diff > 0 else min(y_diff, max_y_diff) # find the max y_diff
+                    convert this line to:
+                        max_y_diff = min(y_diff, max_y_diff) if (y_diff <= 0 and max_y_diff <= 0) else max(y_diff, max_y_diff)
+                    do the same for x
+                    this has made such that no this block has clamping issue on both left and right wall
+                then the issue lies in this line:
+                    max_diff = (max_x_diff, True) if abs(max_x_diff) > abs(max_y_diff) else (max_y_diff, False)
+                    this line also doesn't check for if the values are equal
+                technically when they are equal, both are true, but I need to resolve which way to move, need to get another environmental info
+                    unless I allow it to move in both direction, if moving in one fails, reverse completely and try the other direction
+                    only if both failed then result in rollback
+        - Need to test in complex tight gaps also
+    - randomize block spawn
+    - extend the game window bigger then the play area (to display other stuff)
+    - show next 3 blocks (needs a separate window outside play area)
+        use a deque
+        spawn block now just popleft to cur_block, while pushing new one to queue
+        can use BlockGroup to render and move to display area, use move without collidegroup
+    - block holding
+        show held block (needs a separate window outside play area)
+        activating this moves spawns new block from top
+    - improve movement key responsiveness (reduce lag, delayed input/overshoot) of movement keys
+        might need to optimise code, reduce redundancies, increase efficiency
+        maybe use a speed-up and slow-down for speed boost, or a smoother acceleration profile
+            overshoot is a major issue, happens when hold key for speed boost and stop
+                maybe need a braking method (using keyup in the event get?)
+            tapping the key also has delayed input
+                maybe separate tapping and holding, put tapping in event get (single press), and put as keydown detection
+        or maybe instead of change movement delay for speed boost, just make move twice the distance (like hopping/skipping steps), use scaler argument in move
+        because for movement, the keys are read continuously, unlike the single press keys (which even tracks keydown and keyup)
+            cannot work, it gets stuck near walls/blocks (it thinks step twice into wall, which has collision, so rollback and doesn't move)
+    - need to play and create a cleared line scenario that didn't merge??
+        happens when clearing lines 1 row apart
+        my code only merges the exact number of rows cleared and line merging happens only after clearing lines
+        this can leave floating pieces and even fully cleared rows with uncleared rows above and below it
+            for actual tetris, floating pieces is fine, but not floating fully cleared rows
+        maybe run row merging every iteration, or until no more cleared rows detected
+            so it has to be independent of touchdown
+            currently it checks if row is in idx_cleared_rows, not taking in account for the new cleared rows generated after merging
+                maybe don't move uncleared rows based on shift_count, but move until collide
+                may have to do merging scan from bottom to top
+                I can still shift from top, but it has to combine into the same group and move together after merging, currently, I empty the grouping for the next merge (i.e. uncleared_sprites.empty())
+                    removing "uncleared_sprites.empty()" solves the issue, this allows every merged blocks to move together each time they meet another cleared row
+    - game over
+        game over condition
+            Condition 1: Blocked Spawn
+                when spawned block instantly has collision before moving/falling
+            Condition 2: Lock Out
+                when player manages to fit block in first row, but part of the block is above first row
+                    also happens when player rotate the block and it sets/touchdown, and part of it is touching top wall
+                        my code already prevents rotation (due to rollback)
+                all blocks occupy two rows height upon spawn, should they spawn higher to allow for edge cases (so player can stack right up to second row, and still move and rotate block to fit in first row)?
+                    this works for the "I" block only?
+                I would have to remove collision to top wall / remove top wall entirely?
+                    remove top wall and move them into a separate group or just use a rect, I don't want clamping/rollback with the wall, but I still want to detect collision with it, so when block touchdown and there is collision, game over
+    - pause/play, restart, game menu, high score tracking
+        pause/play: upon key press, enter infinite loop that waits for same key press to break and continue play
+        if window not in focused, game is paused
+        need game paused overlay window showing subsequent options, (instructions, controls, show high scores)
+        needs a separate high score file for data persistence, use .json/.csv file?
+            sorted based on score
+                use pandas
+            for display in pause menu, extract top 5 only
+            update high score file upon game over
+                get score, level and its datetime stamp
+                user needs input field for name
+                    needs another popup window, game-over window
+                    if user does enter name and press enter, run file read again, and update highscore, redraw page, and highlight user's new highest score if it makes the top 5
+                        bonus, add text effect instead of just highlight, loop the effect
+                            modify this effect to be sequential
+                    issue: buggy text entry box
+                        unfocus by clicking outside, then click inside to focus (works)
+                        unfocus by pressing ESC, then click inside to focus (fails to focus)
+                            can be restored by clicking outside then clicking inside 
+                            perhaps .unfocus() is not for me to call, but internally only, or I somehow have to call focus()
+                        look in pygame events, might have to optimize, event queue could be overloaded
+                        or maybe I should replicate what clicking outside to unfocus does internally in the class
+                        tested switching the key to call focus() instead, then the inverse happens, when I focus by pressing key, I then am unable to unfocus by clicking
+                        UIManager is responsible for switching focus
+                            maybe: UIManager.set_focused_set(), get_focused_set()
+                        need to make name entry unabled to be focused on after entry finished
+                    set input length limit
+        add countdown to play (new game/restarted, continue for pause)
+            need to show countdown on screen as overlay
+            issue: countdown_to_play() method works well for initial startup, but running it again after pausing causes issues
+                symptoms like countdown number 3 being skipped, high score text effect typing appear not working
+                could be a conflict between timing objects (e.g. clock, dt)
+                    the countdown should use its own clock object, not the same one from main loop
+            issue: pressing buttons during countdown is registered, and is processed after countdown ends, 
+                intuitively, I thought in the 3 second timer loop, input/events won't be read
+                must prevent this, is there a built-in method to block user inputs?
+                solved by adding "pg.event.get()" in timer while loop
+                    pg.event.get() # get and remove messages from event queue (ignore user inputs during timer countdown, else these messages stay in event queue and carry forward later)
+                    alternatively, can run pg.event.clear()
+        sudden issue with sound bugging out, no sound
+            go to PC's System-Sound-VolumeMixer, run the program, and you can see whether it has been muted, can unmute manually, also can click reset default sound settings for apps, so that windows won't mute it again?
+        for initial startup, need a start game button
+            reuse pause menu, keep controls and highscores
+    - track distribution of blocks over time, ensure don't have too obvious cluster of same blocks
+            it is actually random, but for a human, it is not perceived random due to clusters/streaks
+            in this case, more important for perceived random than actual
+            use weighted random (change probability based on recency)
+    - package the game into an executable? / freezing the game
+        It bundles your script, the Python interpreter, and all required libraries into a single package.
+        allows end-users to run without installing Python
+        Developers use packages like PyInstaller, cx_Freeze, or py2exe to achieve this
+        try PyInstaller
+            pyinstaller --onefile --windowed --add-data "assets;assets" --add-data "data;data" --add-data "config;config" tetris.py
+            results in:
+                dist folder (with exe in it)
+                build folder (speeds up future builds)
+                spec file (in future, can run the command "pyinstaller tetris.spec" only)
+                    instead of the full command like above
+    - add left rotation
+        update menu instructions
+
+Brainstorming:
+    render blocks
+    5 different block types (L, square, |, T, Z)
+        use classes?
+    arrow keys to move block
+        left, right, down (no UP)
+        can accelerate with holding down button (check consecutive press)
+            need another timer to detect hold (optional feature)
+        can press spacebar to jump block to bottom
+    UP button to change orientation / rotate block
+        can change direction of rotation, if near wall, to prevent collision
+    block falling down at fixed rate (increasing rates for higher difficulty)
+    block interaction with bounding box, and each other
+    clear lines
+    show next few blocks
+    scoring
+    block holding
+
+KIV Code:
+    # Clamping + Rollback method for block rotation near walls and other blocks
+        if collide_group:
+            collide_count = len(pg.sprite.groupcollide(self, collide_group, False, False))
+
+            def dfs_offset(direction):
+                nonlocal collide_count
+                last_collide_count = collide_count
+                print(f"attempt shift {direction}")
+                self.move(direction) # move first
+                collide_count = len(pg.sprite.groupcollide(self, collide_group, False, False))
+                print(f"shifted {direction}, collide_count(before): {last_collide_count}, collide_count(after): {collide_count}")
+                
+                if collide_count < last_collide_count:
+                    if not collide_count: 
+                        # if no more collision
+                        print("success")
+                        return True
+                    else:
+                        # if this move reduced the collide count, do this move again recursively
+                        # and return the result of that recursion upon backtracking
+                        return dfs_offset(direction)
+                else: # colide_count >= last_collide_count
+                    # still has collision / collision count increased, backtrack and try other directions
+                    print("bail out")
+                    return False
+
+            if collide_count:
+                print(f"\ncollision during rotation...attempt clamping, initial collide_count: {collide_count}")
+
+                if not (dfs_offset("left") or dfs_offset("right") or dfs_offset("up") or dfs_offset("down")): 
+                    # if all searches failed to reduce count, no solution found, rollback and revert rotation
+                    print("no solution found, rollback")
+                    for tile, old_Tile in zip(self.sprites(), preRotate_tiles):
+                        tile.rect, tile.offset_from_block_center, tile.image = old_Tile
+                    self.block_center = old_center
+                else: # set block upon timer lapsed (full hitbox contact only)
+                isCollide = cur_block and pg.sprite.groupcollide(cur_block.hitbox, set_Blocks_Walls, False, False)
+                if isCollide:
+                    if current_time - last_collide_time > hitbox_collide_countdown:
+                        print("timer lapsed touchdown")
+                        isTouchdown = True
+                else: last_collide_time = current_time
+    # Hitbox-based Timed Touchdown
+        def get_update_hitbox(self):
+            self.hitbox.empty()
+            for tile in self.sprites():
+                tile_clone = Tile("red") # make new Tile object
+                tile_clone.rect.x = tile.rect.x
+                tile_clone.rect.y = tile.rect.y + 1 # use tile's current y position and offset it by 1px
+                self.hitbox.add(tile_clone) # add to local sprite group
+
+            cur_block_shadow = pg.sprite.Group() # to store block's hitbox group (for displaying hitbox)
+
+
+        else: # set block upon timer lapsed (player move/rotate after hitbox first collide)
+            isCollide = cur_block and pg.sprite.groupcollide(cur_block.hitbox, set_Blocks_Walls, False, False)
+
+            if isCollide:
+                # this executes any time the hitbox connects/reconnects
+                if not hitbox_connected:
+                    if cumulative_collide_time == 0: print("initial hitbox collision")
+                    hitbox_connected = True
+                    last_collide_time = current_time # start time (the time as hitbox connects)
+
+                # if actively colliding, check default timer (where player doesn't move/rotate) or cumulative timer (where player does move/rotate), whichever lapsed, trigger RESOLVE
+                # cumulative timer only has value if the player move/rotate after initial collide
+                elif (current_time - last_collide_time > hitbox_collide_countdown) or (cumulative_collide_time > hitbox_collide_countdown + 500): # can fine-tune added time for player to rotate more and avoid touchdown
+                    print("timer lapsed touchdown")
+                    isTouchdown = True
+                    hitbox_connected, cumulative_collide_time = False, 0 # resolve collision, so reset these two
+
+            # no longer colliding, but hitbox_connected still true, meaning collision unresolved, hitbox has been rotated
+            elif hitbox_connected: 
+                # cum_time += time elapsed since stop colliding = current_time - start_time
+                cumulative_collide_time += current_time - last_collide_time # accumulate time lapsed since it was connected
+                # print(f"cumulative_collide_time: {cumulative_collide_time}")
+                hitbox_connected = False # set this to false, so that hitbox can reconnect later
